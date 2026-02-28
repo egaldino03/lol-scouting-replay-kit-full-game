@@ -49,6 +49,20 @@ No Node.js, no Docker, no external services.
 
 ## 🚀 Quick Start
 
+### 0️⃣ Install Python (if not already installed)
+
+1. Go to **[python.org/downloads](https://www.python.org/downloads/)** and download Python **3.9 or newer**
+2. Run the installer
+3. ⚠️ **Tick "Add Python to PATH"** before clicking Install — this is the most common mistake
+
+To verify it worked, open a terminal and run:
+```bash
+python --version
+```
+You should see `Python 3.x.x`. If you get an error, restart your terminal and try again.
+
+---
+
 ### 1️⃣ Clone / download the project
 
 ```bash
