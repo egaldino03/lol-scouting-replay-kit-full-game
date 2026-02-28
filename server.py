@@ -36,16 +36,13 @@ CHAMP_FLAT     = ROOT / "assets" / "champions"
 FRONTEND_HTML  = ROOT / "frontend" / "index.html"
 WARD_DIR       = ROOT / "assets" / "wards"
 
-WARD_FILES = {
-    "yellowTrinket": "yellow_trinket_3340.png",
-    "control":       "pinkward_2055.png",
-}
+ITEM_ID_TO_WARD_TYPE = {3340: "yellowTrinket", 2055: "control", 3364: "sweeper"}
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 MAP_MAX     = 14_820
-MAX_GAME_MS = 300_000   # 5 minutes
+MAX_GAME_MS = 600_000   # 10 minutes
 STEP_MS     = 2_000
 BLUE_HEX    = "#0AC8B9"
 RED_HEX     = "#FF4655"
@@ -131,9 +128,25 @@ def _make_badge(champion: str, team: int, size: int = 80) -> str:
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
-def _make_ward_badge(ward_type: str, team: int, size: int = 44) -> str:
+def _discover_ward_icons() -> Dict[str, Path]:
+    """Scan WARD_DIR and return {wardType: Path} for any file whose stem contains a known item ID."""
+    result = {}
+    if not WARD_DIR.exists():
+        return result
+    for f in WARD_DIR.iterdir():
+        if f.suffix.lower() not in ('.png', '.jpg', '.jpeg'):
+            continue
+        m = re.search(r'(\d+)', f.stem)
+        if m:
+            ward_type = ITEM_ID_TO_WARD_TYPE.get(int(m.group(1)))
+            if ward_type:
+                result[ward_type] = f
+    return result
+
+
+def _make_ward_badge(icon_path: Optional[Path], team: int, size: int = 44) -> str:
     """Return a data:image/png;base64 circular ward badge with team-coloured border."""
-    ward_file = WARD_DIR / WARD_FILES.get(ward_type, "yellow_trinket_3340.png")
+    ward_file = icon_path
     border_px = 4
     hex_col   = BLUE_HEX if team == 100 else RED_HEX
     r, g, b   = int(hex_col[1:3], 16), int(hex_col[3:5], 16), int(hex_col[5:7], 16)
@@ -331,21 +344,25 @@ def _load_snapshots(events_path: Optional[Path]) -> Dict[str, Dict[str, list]]:
                     float(pos.get("z", 0)),
                     int(p.get("level", 1)),
                     cs,
+                    int(p.get("totalGold", 0)),
+                    int(p.get("currentGold", 0)),
                 ]
             snapshots[str(bucket)] = snap
 
     return snapshots
 
 
-def _load_wards(events_path: Optional[Path]) -> List[dict]:
-    """Return list of ward placements within 5 min, with destruction times matched.
+def _load_wards(events_path: Optional[Path]) -> Tuple[List[dict], List[dict]]:
+    """Return (wards, sweeper_raw) from events within 5 min.
 
-    Each entry: {t, tKilled (int|None), placer, type, x, z}
+    wards: [{t, tKilled, placer, type, x, z}]
+    sweeper_raw: [{t, placer}] — positions assigned later from snapshots
     """
     if not events_path or not events_path.exists():
-        return []
+        return [], []
 
-    placed: List[dict] = []
+    placed: List[dict]       = []
+    sweeper_raw: List[dict]  = []
 
     with open(events_path, encoding="utf-8") as f:
         for raw_line in f:
@@ -384,7 +401,29 @@ def _load_wards(events_path: Optional[Path]) -> List[dict]:
                         w["tKilled"] = t
                         break
 
-    return placed
+            elif schema == "item_active_ability_used" and obj.get("itemID") == 3364:
+                sweeper_raw.append({"t": t, "placer": str(obj.get("participantID", 0))})
+
+    return placed, sweeper_raw
+
+
+def _assign_sweeper_positions(sweeper_raw: List[dict], snapshots: Dict[str, dict]) -> List[dict]:
+    """Resolve each sweeper activation to the player's position at that time."""
+    times = sorted(int(k) for k in snapshots)
+    uses  = []
+    for ev in sweeper_raw:
+        pid, t = ev["placer"], ev["t"]
+        pos = None
+        for ts in times:
+            snap = snapshots.get(str(ts), {}).get(pid)
+            if snap and ts >= t:
+                pos = snap
+                break
+        if pos is None and times:
+            pos = snapshots.get(str(times[-1]), {}).get(pid)
+        if pos:
+            uses.append({"t": t, "placer": pid, "x": pos[0], "z": pos[1]})
+    return uses
 
 
 def _compute_respawn_times(kills: List[dict], snapshots: Dict[str, Dict[str, list]]) -> None:
@@ -474,13 +513,14 @@ def _preload_all():
         print(f"  WARNING: map image not found at {MAP_PATH}")
         print("  Place LOL_map.png in assets/map/ to show the minimap.")
 
-    # Ward badge icons (2 types × 2 teams = 4 images)
+    # Ward badge icons — auto-discovered from assets/wards/ by item ID in filename
+    discovered_icons = _discover_ward_icons()
     ward_icons: Dict[str, str] = {}
-    for wtype in ["yellowTrinket", "control"]:
+    for wtype, icon_path in discovered_icons.items():
         for team in [100, 200]:
-            ward_icons[f"{wtype}_{team}"] = _make_ward_badge(wtype, team)
+            ward_icons[f"{wtype}_{team}"] = _make_ward_badge(icon_path, team)
     _cache["ward_icons"] = ward_icons
-    print(f"  Ward icons generated ({len(ward_icons)}).")
+    print(f"  Ward icons generated ({len(ward_icons)}) from {list(discovered_icons.keys())}.")
 
     # Discover all games from data/ (filename-based + legacy folder layout)
     discovered = _discover_games()
@@ -515,9 +555,10 @@ def _preload_all():
                 print("no participants found, skipping.")
                 continue
 
-            snapshots = _load_snapshots(slot.get("events"))
-            kills     = _load_kills(slot.get("events"))
-            wards     = _load_wards(slot.get("events"))
+            snapshots                = _load_snapshots(slot.get("events"))
+            kills                    = _load_kills(slot.get("events"))
+            wards, sweeper_raw       = _load_wards(slot.get("events"))
+            sweeper_uses             = _assign_sweeper_positions(sweeper_raw, snapshots)
             _compute_respawn_times(kills, snapshots)
 
             for pid, info in participants.items():
@@ -528,6 +569,7 @@ def _preload_all():
                 "snapshots":    snapshots,
                 "kills":        kills,
                 "wards":        wards,
+                "sweeper_uses": sweeper_uses,
             }
             print(f"{len(participants)} players, {len(snapshots)} snapshots, "
                   f"{len(kills)} kills, {len(wards)} wards.")
