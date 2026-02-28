@@ -4,7 +4,7 @@
 
 **No cloud service. No API keys. No Node.js. Just Python + a browser.**
 
-![Preview](assets/map/LOL_map.png)
+![Preview](assets/Preview/tool_preview.png)
 
 ---
 
