@@ -1,0 +1,34 @@
+# ── Game data (user-specific, never commit) ─────────────────────────────────
+data/series_*/
+data/*.jsonl
+data/*.json
+
+# ── Downloaded champion images (large, re-downloadable) ──────────────────────
+assets/champions/*.png
+assets/champions/*.jpg
+assets/champions/*.jpeg
+assets/champions/centered/*.png
+assets/champions/centered/*.jpg
+assets/champions/centered/*.jpeg
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# ── Editors ──────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini

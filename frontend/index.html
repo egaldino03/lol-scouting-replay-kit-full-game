@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LoL Map Replay</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Roboto+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #07090f;
+      --surface:  #0c1018;
+      --surface2: #131b26;
+      --border:   #1a2535;
+      --border2:  #243040;
+      --accent:   #c8aa6e;
+      --accent-d: #a08848;
+      --blue:     #0ac8b9;
+      --red:      #ff4655;
+      --text:     #5a6a80;
+      --text-md:  #8a9ab0;
+      --text-hi:  #d8ccb8;
+    }
+
+    html, body, #root {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text-hi);
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Scrollbar ────────────────────────────── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+    /* ── Layout ───────────────────────────────── */
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Header ───────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      height: 52px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      gap: 16px;
+    }
+
+    /* Series pills — left side */
+    .series-tabs { display: flex; gap: 3px; align-items: center; }
+
+    .series-tab {
+      padding: 5px 14px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      background: transparent;
+      color: var(--text-md);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      white-space: nowrap;
+    }
+    .series-tab:hover { color: var(--text-hi); border-color: var(--border2); }
+    .series-tab.active {
+      background: rgba(200,170,110,0.1);
+      color: var(--accent);
+      border-color: var(--accent-d);
+      font-weight: 600;
+    }
+
+    /* Series meta — middle */
+    .header-meta {
+      flex: 1;
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text);
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    /* Game tabs — right side */
+    .game-tabs { display: flex; gap: 3px; }
+
+    .tab-btn {
+      padding: 5px 14px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      background: transparent;
+      color: var(--text-md);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      cursor: pointer;
+      transition: color 0.12s, border-color 0.12s, background 0.12s;
+    }
+    .tab-btn:hover { color: var(--accent); border-color: var(--accent-d); }
+    .tab-btn.active {
+      background: var(--accent);
+      color: var(--bg);
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* ── Main ─────────────────────────────────── */
+    .main {
+      flex: 1;
+      position: relative;
+      display: flex;
+      overflow: hidden;
+      padding: 20px;
+      align-items: flex-start;
+      justify-content: center;
+    }
+
+    /* ── Map section ──────────────────────────── */
+    .map-section {
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .map-wrap {
+      position: relative;
+      width: 614px;
+      height: 614px;
+      background: #040609;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      transition: opacity 0.2s ease;
+    }
+    .map-wrap.fading { opacity: 0.35; pointer-events: none; }
+
+    .map-wrap canvas { display: block; }
+
+    .map-timer {
+      position: absolute;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Roboto Mono', monospace;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.12em;
+      text-shadow: 0 0 28px rgba(200,170,110,0.35), 0 1px 4px rgba(0,0,0,0.9);
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    .map-loading {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(7,9,15,0.7);
+      font-size: 10px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+
+    /* ── Controls ─────────────────────────────── */
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+      padding: 10px 14px;
+      width: 614px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      flex-shrink: 0;
+    }
+
+    .btn-play {
+      padding: 6px 18px;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      background: var(--accent);
+      color: var(--bg);
+      border: 1px solid var(--accent);
+      border-radius: 3px;
+      cursor: pointer;
+      min-width: 96px;
+      transition: background 0.12s, color 0.12s;
+      flex-shrink: 0;
+    }
+    .btn-play.paused { background: transparent; color: var(--accent); }
+    .btn-play:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .slider-wrap { flex: 1; display: flex; align-items: center; }
+
+    .slider {
+      width: 100%;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 3px;
+      background: var(--border2);
+      border-radius: 2px;
+      cursor: pointer;
+      outline: none;
+    }
+    .slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid var(--bg);
+      box-shadow: 0 0 8px rgba(200,170,110,0.55);
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+    .slider::-webkit-slider-thumb:hover { transform: scale(1.25); }
+    .slider::-moz-range-thumb {
+      width: 15px; height: 15px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid var(--bg);
+      cursor: pointer;
+    }
+
+    .btn-icon {
+      padding: 6px 10px;
+      font-size: 15px;
+      font-family: inherit;
+      background: transparent;
+      color: var(--text-md);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      cursor: pointer;
+      transition: color 0.12s, border-color 0.12s;
+      flex-shrink: 0;
+    }
+    .btn-icon:hover { color: var(--text-hi); border-color: var(--border2); }
+
+    .speed-wrap { display: flex; gap: 3px; flex-shrink: 0; }
+
+    .btn-speed {
+      padding: 6px 12px;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 11px;
+      font-weight: 500;
+      background: transparent;
+      color: var(--text-md);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+    .btn-speed.active {
+      color: var(--accent);
+      border-color: var(--accent-d);
+      background: rgba(200,170,110,0.07);
+      font-weight: 700;
+    }
+    .btn-speed:hover:not(.active) { border-color: var(--border2); color: var(--text-hi); }
+
+    /* ── Team panel ───────────────────────────── */
+    .panel {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 360px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+      padding: 20px 16px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      transition: opacity 0.2s ease;
+    }
+    .panel.fading { opacity: 0.35; pointer-events: none; }
+
+    .team-block {}
+
+    .team-label {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      padding-bottom: 7px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .player-row {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 5px 7px;
+      border-radius: 4px;
+      cursor: default;
+      transition: background 0.1s;
+    }
+    .player-row:hover { background: var(--surface2); }
+
+    /* Badge wrapper — holds image + level circle + death overlay */
+    .player-badge-wrap {
+      position: relative;
+      width: 56px;
+      height: 56px;
+      flex-shrink: 0;
+    }
+
+    .player-badge {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      display: block;
+      transition: filter 0.2s;
+    }
+    .player-badge.dead { filter: grayscale(1) brightness(0.4); }
+
+    /* Death countdown — centered over badge */
+    .player-death-timer {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--red);
+      text-shadow: 0 0 8px rgba(0,0,0,1), 0 0 4px rgba(0,0,0,1);
+      pointer-events: none;
+    }
+
+    /* Level badge — bottom-right of badge wrap */
+    .player-level-badge {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #1a2535;
+      border: 2px solid #07090f;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--accent);
+      pointer-events: none;
+    }
+
+    .player-info { min-width: 0; flex: 1; }
+
+    .player-champ {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-hi);
+      line-height: 1.25;
+    }
+
+    .player-name {
+      font-size: 11px;
+      color: var(--text);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .player-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+      flex-shrink: 0;
+      margin-left: auto;
+    }
+
+    .player-kda {
+      display: flex;
+      gap: 2px;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .player-cs {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 11px;
+      color: var(--text-md);
+    }
+
+    /* ── Kill feed overlay ────────────────────── */
+    .kill-feed {
+      position: absolute;
+      top: 54px;
+      right: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      pointer-events: none;
+      max-width: 200px;
+    }
+
+    .kill-entry {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      background: rgba(4, 6, 9, 0.72);
+      padding: 4px 7px 4px 5px;
+      border-radius: 3px;
+      backdrop-filter: blur(4px);
+    }
+
+    .kf-badge {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .kf-assist {
+      width: 14px;
+      height: 14px;
+      opacity: 0.65;
+    }
+
+    .kf-sep {
+      font-size: 11px;
+      color: var(--red);
+      margin: 0 1px;
+      flex-shrink: 0;
+    }
+
+    .kf-assists {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      margin-left: 3px;
+      padding-left: 4px;
+      border-left: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .kf-time {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 9px;
+      color: var(--text);
+      margin-left: 4px;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // ── Constants ────────────────────────────────────────────────────────────
+    const MAP_MAX  = 14820;
+    const MAX_MS   = 300_000;
+    const BADGE_PX = 60;
+
+    // ── Coordinate helpers ───────────────────────────────────────────────────
+    function toCanvas(gx, gz, W, H) {
+      return {
+        x: (gx / MAP_MAX) * W,
+        y: H * (1 - gz / MAP_MAX),
+      };
+    }
+
+    function lerpPos(a, b, t) {
+      return [
+        a[0] + (b[0] - a[0]) * t,
+        a[1] + (b[1] - a[1]) * t,
+        a[2] + (b[2] - a[2]) * t,
+        a[3] + (b[3] - a[3]) * t,
+      ];
+    }
+
+    function getPos(snapshots, times, ms, pid) {
+      if (!times.length) return null;
+      if (ms <= times[0]) return snapshots[times[0]]?.[pid] ?? null;
+      if (ms >= times[times.length - 1]) return snapshots[times[times.length - 1]]?.[pid] ?? null;
+      let lo = 0, hi = times.length - 1;
+      while (lo < hi - 1) {
+        const mid = (lo + hi) >> 1;
+        if (times[mid] <= ms) lo = mid; else hi = mid;
+      }
+      const a = snapshots[times[lo]]?.[pid];
+      const b = snapshots[times[hi]]?.[pid];
+      if (!a) return b ?? null;
+      if (!b) return a;
+      const t = (ms - times[lo]) / (times[hi] - times[lo]);
+      return lerpPos(a, b, t);
+    }
+
+    // KDA computed from kill events (accurate, doesn't rely on stats_update parsing)
+    function computeKDA(kills, ms, pid) {
+      let k = 0, d = 0, a = 0;
+      for (const ev of kills) {
+        if (ev.t > ms) break;
+        if (ev.killer  === pid) k++;
+        if (ev.victim  === pid) d++;
+        if (ev.assists.includes(pid)) a++;
+      }
+      return [k, d, a];
+    }
+
+    function fmtMs(ms) {
+      const m = Math.floor(ms / 60000);
+      const s = Math.floor((ms % 60000) / 1000);
+      return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }
+
+    // ── Death helpers (respawnAt comes from server, detected from position data) ──
+
+    // Returns {deathAt, respawnAt, remainingMs} if pid is dead at timeMs, else null.
+    // respawnAt is null when the champion didn't respawn within the 5-min window.
+    function getDeathInfo(kills, pid, timeMs) {
+      if (!kills) return null;
+      for (let i = kills.length - 1; i >= 0; i--) {
+        const ev = kills[i];
+        if (ev.t > timeMs) continue;
+        if (ev.victim !== pid) continue;
+        const respawnAt = ev.respawnAt ?? null;
+        if (respawnAt !== null && timeMs >= respawnAt) return null; // alive
+        const remainingMs = respawnAt !== null ? respawnAt - timeMs : Infinity;
+        return { deathAt: ev.t, respawnAt, remainingMs };
+      }
+      return null;
+    }
+
+    // Like getPos but:
+    //   - returns null while dead
+    //   - snaps to the first post-respawn snapshot so the champion appears at
+    //     base immediately, not interpolated from the death location.
+    function getEffectivePos(snapshots, times, kills, pid, timeMs) {
+      if (!kills) return getPos(snapshots, times, timeMs, pid);
+
+      for (let i = kills.length - 1; i >= 0; i--) {
+        const ev = kills[i];
+        if (ev.t > timeMs) continue;
+        if (ev.victim !== pid) continue;
+
+        const respawnAt = ev.respawnAt ?? null;
+        if (respawnAt === null || timeMs < respawnAt) return null; // dead
+
+        // Alive — if the interpolation window straddles the respawn point,
+        // snap to the post-respawn snapshot to avoid blending from death spot.
+        if (timeMs < times[times.length - 1]) {
+          let lo = 0, hi = times.length - 1;
+          while (lo < hi - 1) {
+            const mid = (lo + hi) >> 1;
+            if (times[mid] <= timeMs) lo = mid; else hi = mid;
+          }
+          if (times[lo] < respawnAt && respawnAt <= times[hi]) {
+            return snapshots[times[hi]]?.[pid] ?? null;
+          }
+        }
+        break;
+      }
+
+      return getPos(snapshots, times, timeMs, pid);
+    }
+
+    // ── KillFeed ─────────────────────────────────────────────────────────────
+    function KillFeed({ kills, participants, timeMs }) {
+      if (!kills || !participants) return null;
+      const visible = kills.filter(k => k.t <= timeMs).slice(-8).reverse();
+      if (!visible.length) return null;
+      return (
+        <div className="kill-feed">
+          {visible.map((ev, i) => {
+            const killer  = participants[ev.killer];
+            const victim  = participants[ev.victim];
+            const assists = ev.assists.map(a => participants[a]).filter(Boolean);
+            return (
+              <div key={i} className="kill-entry">
+                <img src={killer?.badge} className="kf-badge" title={`${killer?.champion} (${killer?.player})`} />
+                <span className="kf-sep">›</span>
+                <img src={victim?.badge} className="kf-badge" title={`${victim?.champion} (${victim?.player})`} />
+                {assists.length > 0 && (
+                  <div className="kf-assists">
+                    {assists.map((a, j) => (
+                      <img key={j} src={a.badge} className="kf-badge kf-assist" title={`Assist: ${a.champion} (${a.player})`} />
+                    ))}
+                  </div>
+                )}
+                <span className="kf-time">{fmtMs(ev.t)}</span>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // ── MapCanvas ────────────────────────────────────────────────────────────
+    function MapCanvas({ gameData, mapSrc, timeMs, wardIconImgs }) {
+      const canvasRef = useRef();
+      const assetsRef = useRef({ map: null, badges: {}, loaded: 0, total: 0 });
+      const [ready, setReady] = useState(false);
+
+      useEffect(() => {
+        if (!mapSrc) return;
+        assetsRef.current.map = null;
+        const img = new window.Image();
+        img.onload = () => { assetsRef.current.map = img; checkReady(); };
+        img.src = mapSrc;
+      }, [mapSrc]);
+
+      useEffect(() => {
+        if (!gameData) return;
+        setReady(false);
+        assetsRef.current.badges = {};
+        assetsRef.current.loaded = 0;
+        const pids = Object.keys(gameData.participants);
+        assetsRef.current.total = pids.length;
+        for (const pid of pids) {
+          const img = new window.Image();
+          img.onload = () => {
+            assetsRef.current.badges[pid] = img;
+            assetsRef.current.loaded++;
+            checkReady();
+          };
+          img.src = gameData.participants[pid].badge;
+        }
+      }, [gameData]);
+
+      function checkReady() {
+        const a = assetsRef.current;
+        if (a.map && a.loaded >= a.total && a.total > 0) setReady(true);
+      }
+
+      useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width, H = canvas.height;
+        ctx.clearRect(0, 0, W, H);
+        const { map } = assetsRef.current;
+        if (map) ctx.drawImage(map, 0, 0, W, H);
+        if (!ready || !gameData) return;
+        const { participants, snapshots, wards } = gameData;
+        const times = Object.keys(snapshots).map(Number).sort((a, b) => a - b);
+
+        // ── Draw active wards ────────────────────────────────────────────────
+        if (wards && wardIconImgs) {
+          const WARD_PX = 19;
+          const half_w  = WARD_PX / 2;
+          const TRINKET_LIFESPAN_MS = 90_000;
+          for (const w of wards) {
+            if (w.t > timeMs) continue;
+            if (w.tKilled !== null && w.tKilled <= timeMs) continue;
+            if (w.type === 'yellowTrinket' && (timeMs - w.t) >= TRINKET_LIFESPAN_MS) continue;
+
+            const { x, y } = toCanvas(w.x, w.z, W, H);
+            const placerTeam = participants[w.placer]?.team ?? 100;
+            const iconKey    = `${w.type}_${placerTeam}`;
+            const wardImg    = wardIconImgs[iconKey];
+            if (wardImg) {
+              ctx.drawImage(wardImg, x - half_w, y - half_w, WARD_PX, WARD_PX);
+            }
+          }
+        }
+
+        // ── Draw champion badges + level circles ─────────────────────────────
+        const half = BADGE_PX / 2;
+        const kills = gameData.kills;
+        ctx.font = 'bold 10px "Roboto Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (const [pid] of Object.entries(participants)) {
+          const pos = getEffectivePos(snapshots, times, kills, pid, timeMs);
+          if (!pos) continue; // dead or no data
+          const { x, y } = toCanvas(pos[0], pos[1], W, H);
+          const img = assetsRef.current.badges[pid];
+          if (img) ctx.drawImage(img, x - half, y - half, BADGE_PX, BADGE_PX);
+
+          // Level circle — bottom-right corner of badge
+          const lvl = Math.floor(pos[2]) || 1;
+          const lx = x + half - 9;
+          const ly = y + half - 9;
+          const lr = 9;
+          ctx.beginPath(); ctx.arc(lx, ly, lr + 1.5, 0, Math.PI * 2);
+          ctx.fillStyle = '#07090f'; ctx.fill();
+          ctx.beginPath(); ctx.arc(lx, ly, lr, 0, Math.PI * 2);
+          ctx.fillStyle = '#1a2535'; ctx.fill();
+          ctx.fillStyle = '#c8aa6e';
+          ctx.fillText(lvl, lx, ly);
+        }
+      }, [gameData, timeMs, ready]);
+
+      return <canvas ref={canvasRef} width={614} height={614} />;
+    }
+
+    // ── TeamPanel ────────────────────────────────────────────────────────────
+    function TeamPanel({ participants, kills, snapshots, timeMs }) {
+      if (!participants) return null;
+      const times   = snapshots ? Object.keys(snapshots).map(Number).sort((a, b) => a - b) : [];
+      const entries = Object.entries(participants);
+      const blue = entries.filter(([, p]) => p.team === 100);
+      const red  = entries.filter(([, p]) => p.team === 200);
+      return (
+        <aside className="panel">
+          <TeamBlock title="Blue Side" color="var(--blue)" players={blue} kills={kills} snapshots={snapshots} times={times} timeMs={timeMs} />
+          <TeamBlock title="Red Side"  color="var(--red)"  players={red}  kills={kills} snapshots={snapshots} times={times} timeMs={timeMs} />
+        </aside>
+      );
+    }
+
+    function TeamBlock({ title, color, players, kills, snapshots, times, timeMs }) {
+      return (
+        <div className="team-block">
+          <div className="team-label" style={{ color }}>{title}</div>
+          {players.map(([pid, p]) => {
+            const [k, d, a] = kills ? computeKDA(kills, timeMs, pid) : [0, 0, 0];
+            const pos       = snapshots ? getPos(snapshots, times, timeMs, pid) : null;
+            const level     = Math.floor(pos?.[2] ?? 1) || 1;
+            const cs        = Math.floor(pos?.[3] ?? 0);
+            const death     = kills ? getDeathInfo(kills, pid, timeMs) : null;
+            const deathSecs = death && isFinite(death.remainingMs) ? Math.ceil(death.remainingMs / 1000) : null;
+            return (
+              <div key={pid} className="player-row">
+                <div className="player-badge-wrap">
+                  <img src={p.badge} alt={p.champion} className={`player-badge${death ? ' dead' : ''}`} />
+                  {death && (
+                    <div className="player-death-timer">{deathSecs !== null ? `${deathSecs}s` : '✕'}</div>
+                  )}
+                  <div className="player-level-badge">{level}</div>
+                </div>
+                <div className="player-info">
+                  <div className="player-champ">{p.champion}</div>
+                  <div className="player-name">{p.player}</div>
+                </div>
+                <div className="player-right">
+                  <div className="player-kda">
+                    <span style={{ color: 'var(--text-hi)' }}>{k}</span>
+                    <span style={{ color: 'var(--text)' }}>/</span>
+                    <span style={{ color: 'var(--red)' }}>{d}</span>
+                    <span style={{ color: 'var(--text)' }}>/</span>
+                    <span style={{ color: 'var(--text-hi)' }}>{a}</span>
+                  </div>
+                  <div className="player-cs">{cs} cs</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // ── App ──────────────────────────────────────────────────────────────────
+    function App() {
+      const [seriesList,   setSeriesList]   = useState([]);
+      const [seriesId,     setSeriesId]     = useState(null);
+      const [gameNum,      setGameNum]      = useState(1);
+      const [gameData,     setGameData]     = useState(null);
+      const [mapSrc,       setMapSrc]       = useState(null);
+      const [wardIconImgs, setWardIconImgs] = useState(null);
+      const [timeMs,       setTimeMs]       = useState(0);
+      const [playing,      setPlaying]      = useState(false);
+      const [speed,        setSpeed]        = useState(1);
+      const [loading,      setLoading]      = useState(true);
+
+      const rafRef  = useRef(null);
+      const animRef = useRef({ active: false, startWall: 0, startGame: 0, speed: 1, max: MAX_MS });
+
+      const currentSeries = seriesList.find(s => s.id === seriesId) ?? null;
+      const availableGames = currentSeries?.games ?? [];
+      const maxTime = gameData
+        ? Math.max(...Object.keys(gameData.snapshots).map(Number))
+        : MAX_MS;
+
+      // Fetch map image once
+      useEffect(() => {
+        fetch('/api/map').then(r => r.json()).then(d => setMapSrc(d.data));
+      }, []);
+
+      // Fetch ward icons once, preload as Image objects
+      useEffect(() => {
+        fetch('/api/ward-icons')
+          .then(r => r.json())
+          .then(icons => {
+            const imgs = {};
+            let loaded = 0;
+            const keys = Object.keys(icons);
+            for (const key of keys) {
+              const img = new window.Image();
+              img.onload = () => {
+                imgs[key] = img;
+                loaded++;
+                if (loaded === keys.length) setWardIconImgs({ ...imgs });
+              };
+              img.src = icons[key];
+            }
+          });
+      }, []);
+
+      // Fetch series list once; default to first series + first game
+      useEffect(() => {
+        fetch('/api/series')
+          .then(r => r.json())
+          .then(list => {
+            setSeriesList(list);
+            if (list.length > 0) {
+              setSeriesId(list[0].id);
+              setGameNum(list[0].games[0] ?? 1);
+            }
+          });
+      }, []);
+
+      // Fetch game data whenever series or game changes
+      useEffect(() => {
+        if (!seriesId) return;
+        stopAnim();
+        setPlaying(false);
+        setTimeMs(0);
+        setLoading(true);
+        setGameData(null);
+        fetch(`/api/series/${seriesId}/game/${gameNum}`)
+          .then(r => r.json())
+          .then(d => { setGameData(d); setLoading(false); });
+      }, [seriesId, gameNum]);
+
+      // Cleanup on unmount
+      useEffect(() => () => stopAnim(), []);
+
+      // ── Animation ────────────────────────────────────────────────────────
+      function startAnim(fromMs, spd, max) {
+        cancelAnimationFrame(rafRef.current);
+        animRef.current = { active: true, startWall: performance.now(), startGame: fromMs, speed: spd, max };
+        const tick = (now) => {
+          const s = animRef.current;
+          if (!s.active) return;
+          const t = s.startGame + (now - s.startWall) * s.speed;
+          if (t >= s.max) { setTimeMs(s.max); setPlaying(false); s.active = false; return; }
+          setTimeMs(t);
+          rafRef.current = requestAnimationFrame(tick);
+        };
+        rafRef.current = requestAnimationFrame(tick);
+      }
+
+      function stopAnim() {
+        if (animRef.current) animRef.current.active = false;
+        cancelAnimationFrame(rafRef.current);
+      }
+
+      // ── Handlers ─────────────────────────────────────────────────────────
+      const handleSeries = (id) => {
+        const s = seriesList.find(s => s.id === id);
+        setSeriesId(id);
+        setGameNum(s?.games[0] ?? 1);
+      };
+
+      const handleGame = (n) => setGameNum(n);
+
+      const handlePlayPause = () => {
+        if (playing) { stopAnim(); setPlaying(false); }
+        else { setPlaying(true); startAnim(timeMs, speed, maxTime); }
+      };
+
+      const handleSpeed = (s) => {
+        setSpeed(s);
+        if (playing) { stopAnim(); startAnim(timeMs, s, maxTime); }
+      };
+
+      const handleSlider = (e) => {
+        stopAnim(); setPlaying(false); setTimeMs(Number(e.target.value));
+      };
+
+      const handleReset = () => { stopAnim(); setPlaying(false); setTimeMs(0); };
+
+      // ── Timer ─────────────────────────────────────────────────────────────
+      const mins  = Math.floor(timeMs / 60000);
+      const secs  = Math.floor((timeMs % 60000) / 1000);
+      const timer = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+
+      return (
+        <div className="app">
+
+          {/* ── Header ──────────────────────────────────────────────────── */}
+          <header className="header">
+            {/* Series pills — left */}
+            <div className="series-tabs">
+              {seriesList.map(s => (
+                <button
+                  key={s.id}
+                  className={`series-tab ${seriesId === s.id ? 'active' : ''}`}
+                  onClick={() => handleSeries(s.id)}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Subtle series meta — center */}
+            <span className="header-meta">
+              {seriesId ? `Series ${seriesId} · First 5 min` : ''}
+            </span>
+
+            {/* Game tabs — right */}
+            <div className="game-tabs">
+              {availableGames.map(n => (
+                <button
+                  key={n}
+                  className={`tab-btn ${gameNum === n ? 'active' : ''}`}
+                  onClick={() => handleGame(n)}
+                >
+                  Game {n}
+                </button>
+              ))}
+            </div>
+          </header>
+
+          {/* ── Main ────────────────────────────────────────────────────── */}
+          <main className="main">
+
+            {/* Map + Controls */}
+            <section className="map-section">
+              <div className={`map-wrap ${loading ? 'fading' : ''}`}>
+                <MapCanvas gameData={gameData} mapSrc={mapSrc} timeMs={timeMs} wardIconImgs={wardIconImgs} />
+                <div className="map-timer">{timer}</div>
+                <KillFeed kills={gameData?.kills} participants={gameData?.participants} timeMs={timeMs} />
+                {loading && <div className="map-loading">Loading</div>}
+              </div>
+
+              <div className="controls">
+                <button
+                  className={`btn-play ${playing ? 'paused' : ''}`}
+                  onClick={handlePlayPause}
+                  disabled={loading}
+                >
+                  {playing ? '⏸  PAUSE' : '▶  PLAY'}
+                </button>
+
+                <div className="slider-wrap">
+                  <input
+                    type="range"
+                    className="slider"
+                    min={0}
+                    max={maxTime}
+                    step={50}
+                    value={Math.round(timeMs)}
+                    onChange={handleSlider}
+                  />
+                </div>
+
+                <button className="btn-icon" onClick={handleReset} title="Reset">↺</button>
+
+                <div className="speed-wrap">
+                  {[1, 2, 4].map(s => (
+                    <button
+                      key={s}
+                      className={`btn-speed ${speed === s ? 'active' : ''}`}
+                      onClick={() => handleSpeed(s)}
+                    >
+                      ×{s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            {/* Team panel */}
+            <TeamPanel
+              participants={gameData?.participants}
+              kills={gameData?.kills}
+              snapshots={gameData?.snapshots}
+              timeMs={timeMs}
+            />
+
+          </main>
+
+        </div>
+      );
+    }
+
+    // ── Mount ────────────────────────────────────────────────────────────────
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
