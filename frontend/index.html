@@ -416,6 +416,17 @@
       color: var(--text-md);
     }
 
+    .player-gold {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 11px;
+      color: var(--accent);
+    }
+
+    .player-gold-current {
+      color: var(--text-md);
+      font-size: 10px;
+    }
+
     /* ── Kill feed overlay ────────────────────── */
     .kill-feed {
       position: absolute;
@@ -484,7 +495,7 @@
 
     // ── Constants ────────────────────────────────────────────────────────────
     const MAP_MAX  = 14820;
-    const MAX_MS   = 300_000;
+    const MAX_MS   = 600_000;
     const BADGE_PX = 60;
 
     // ── Coordinate helpers ───────────────────────────────────────────────────
@@ -496,12 +507,7 @@
     }
 
     function lerpPos(a, b, t) {
-      return [
-        a[0] + (b[0] - a[0]) * t,
-        a[1] + (b[1] - a[1]) * t,
-        a[2] + (b[2] - a[2]) * t,
-        a[3] + (b[3] - a[3]) * t,
-      ];
+      return a.map((v, i) => v + (b[i] - v) * t);
     }
 
     function getPos(snapshots, times, ms, pid) {
@@ -622,7 +628,7 @@
     }
 
     // ── MapCanvas ────────────────────────────────────────────────────────────
-    function MapCanvas({ gameData, mapSrc, timeMs, wardIconImgs }) {
+    function MapCanvas({ gameData, mapSrc, timeMs, wardIconImgs, sweeperUses }) {
       const canvasRef = useRef();
       const assetsRef = useRef({ map: null, badges: {}, loaded: 0, total: 0 });
       const [ready, setReady] = useState(false);
@@ -675,6 +681,7 @@
           const WARD_PX = 19;
           const half_w  = WARD_PX / 2;
           const TRINKET_LIFESPAN_MS = 90_000;
+
           for (const w of wards) {
             if (w.t > timeMs) continue;
             if (w.tKilled !== null && w.tKilled <= timeMs) continue;
@@ -688,9 +695,17 @@
               ctx.drawImage(wardImg, x - half_w, y - half_w, WARD_PX, WARD_PX);
             }
           }
+
         }
 
         // ── Draw champion badges + level circles ─────────────────────────────
+        const SWEEPER_LIFESPAN_MS = 6_000;
+        const activeSweepers = new Set(
+          (sweeperUses ?? [])
+            .filter(s => s.t <= timeMs && timeMs - s.t <= SWEEPER_LIFESPAN_MS)
+            .map(s => s.placer)
+        );
+
         const half = BADGE_PX / 2;
         const kills = gameData.kills;
         ctx.font = 'bold 10px "Roboto Mono", monospace';
@@ -714,6 +729,37 @@
           ctx.fillStyle = '#1a2535'; ctx.fill();
           ctx.fillStyle = '#c8aa6e';
           ctx.fillText(lvl, lx, ly);
+        }
+
+        // ── Sweeper bubbles — drawn after all badges so they sit on top ────────
+        const SWEEP_R = 11;
+        for (const [pid] of Object.entries(participants)) {
+          if (!activeSweepers.has(pid)) continue;
+          const pos = getEffectivePos(snapshots, times, kills, pid, timeMs);
+          if (!pos) continue;
+          const { x, y } = toCanvas(pos[0], pos[1], W, H);
+          const placerTeam = participants[pid]?.team ?? 100;
+          const teamColor  = placerTeam === 100 ? '#0AC8B9' : '#FF4655';
+          // Centered just above the badge
+          const bx = x;
+          const by = y - half - SWEEP_R - 3;
+          // Dark outline
+          ctx.beginPath(); ctx.arc(bx, by, SWEEP_R + 1.5, 0, Math.PI * 2);
+          ctx.fillStyle = '#07090f'; ctx.fill();
+          // Team-coloured border
+          ctx.beginPath(); ctx.arc(bx, by, SWEEP_R + 0.5, 0, Math.PI * 2);
+          ctx.strokeStyle = teamColor; ctx.lineWidth = 1.5; ctx.stroke();
+          // Icon or fallback fill
+          const swImg = wardIconImgs?.[`sweeper_${placerTeam}`];
+          if (swImg) {
+            ctx.save();
+            ctx.beginPath(); ctx.arc(bx, by, SWEEP_R, 0, Math.PI * 2); ctx.clip();
+            ctx.drawImage(swImg, bx - SWEEP_R, by - SWEEP_R, SWEEP_R * 2, SWEEP_R * 2);
+            ctx.restore();
+          } else {
+            ctx.beginPath(); ctx.arc(bx, by, SWEEP_R, 0, Math.PI * 2);
+            ctx.fillStyle = teamColor; ctx.fill();
+          }
         }
       }, [gameData, timeMs, ready]);
 
@@ -741,10 +787,12 @@
           <div className="team-label" style={{ color }}>{title}</div>
           {players.map(([pid, p]) => {
             const [k, d, a] = kills ? computeKDA(kills, timeMs, pid) : [0, 0, 0];
-            const pos       = snapshots ? getPos(snapshots, times, timeMs, pid) : null;
-            const level     = Math.floor(pos?.[2] ?? 1) || 1;
-            const cs        = Math.floor(pos?.[3] ?? 0);
-            const death     = kills ? getDeathInfo(kills, pid, timeMs) : null;
+            const pos        = snapshots ? getPos(snapshots, times, timeMs, pid) : null;
+            const level      = Math.floor(pos?.[2] ?? 1) || 1;
+            const cs         = Math.floor(pos?.[3] ?? 0);
+            const totalGold  = Math.floor(pos?.[4] ?? 0);
+            const currentGold = Math.floor(pos?.[5] ?? 0);
+            const death      = kills ? getDeathInfo(kills, pid, timeMs) : null;
             const deathSecs = death && isFinite(death.remainingMs) ? Math.ceil(death.remainingMs / 1000) : null;
             return (
               <div key={pid} className="player-row">
@@ -768,6 +816,7 @@
                     <span style={{ color: 'var(--text-hi)' }}>{a}</span>
                   </div>
                   <div className="player-cs">{cs} cs</div>
+                  <div className="player-gold">{totalGold.toLocaleString()}g <span className="player-gold-current">({currentGold.toLocaleString()}g)</span></div>
                 </div>
               </div>
             );
@@ -945,7 +994,7 @@
             {/* Map + Controls */}
             <section className="map-section">
               <div className={`map-wrap ${loading ? 'fading' : ''}`}>
-                <MapCanvas gameData={gameData} mapSrc={mapSrc} timeMs={timeMs} wardIconImgs={wardIconImgs} />
+                <MapCanvas gameData={gameData} mapSrc={mapSrc} timeMs={timeMs} wardIconImgs={wardIconImgs} sweeperUses={gameData?.sweeper_uses ?? []} />
                 <div className="map-timer">{timer}</div>
                 <KillFeed kills={gameData?.kills} participants={gameData?.participants} timeMs={timeMs} />
                 {loading && <div className="map-loading">Loading</div>}
