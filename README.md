@@ -15,7 +15,7 @@
 | 🧍 | **Level 1 positioning** | Where each player starts and how they move in the first minute |
 | 🟡 | **Early warding** | First and second trinket placements — position and timing |
 | 🌲 | **Jungle pathing** | The jungler's route from opening clear through first gank window |
-| ⚔️ | **Kill & death patterns** | Lane pressure, dives, and skirmishes in the first 5 minutes |
+| ⚔️ | **Kill & death patterns** | Lane pressure, dives, and skirmishes across the full game |
 
 ---
 
@@ -218,7 +218,7 @@ Both layouts can be mixed in the same `data/` folder.
 | `ward_placed` | Ward placement — type, placer, position, time |
 | `ward_killed` | Ward destruction — matched to placement by position |
 
-> Only the **first 5 minutes** of each game are loaded (configurable via `MAX_GAME_MS` in `server.py`).
+> Each game is loaded in full (configurable via `MAX_GAME_MS` in `server.py`).
 
 ---
 
@@ -242,7 +242,7 @@ All tuneable constants are at the top of `server.py`:
 
 | Constant | Default | Description |
 |---|---|---|
-| `MAX_GAME_MS` | `300_000` | How many ms of each game to load (5 min) |
+| `MAX_GAME_MS` | `86_400_000` | How many ms of each game to load (24 h / full game) |
 | `STEP_MS` | `2_000` | Position snapshot interval |
 | `BLUE_HEX` | `#0AC8B9` | Blue side badge border colour |
 | `RED_HEX` | `#FF4655` | Red side badge border colour |

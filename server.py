@@ -42,7 +42,7 @@ ITEM_ID_TO_WARD_TYPE = {3340: "yellowTrinket", 2055: "control", 3364: "sweeper"}
 # Constants
 # ---------------------------------------------------------------------------
 MAP_MAX     = 14_820
-MAX_GAME_MS = 600_000   # 10 minutes
+MAX_GAME_MS = 86_400_000   # 24 hours — effectively unlimited, full game
 STEP_MS     = 2_000
 BLUE_HEX    = "#0AC8B9"
 RED_HEX     = "#FF4655"
@@ -305,7 +305,7 @@ def _load_participants(summary_path: Optional[Path]) -> Dict[str, dict]:
 
 
 def _load_snapshots(events_path: Optional[Path]) -> Dict[str, Dict[str, list]]:
-    """Return {str(time_ms): {str(pid): [x, z, level, cs]}} sampled every 2 s up to 5 min."""
+    """Return {str(time_ms): {str(pid): [x, z, level, cs]}} sampled every 2 s for the full game."""
     if not events_path or not events_path.exists():
         return {}
 
@@ -353,7 +353,7 @@ def _load_snapshots(events_path: Optional[Path]) -> Dict[str, Dict[str, list]]:
 
 
 def _load_wards(events_path: Optional[Path]) -> Tuple[List[dict], List[dict]]:
-    """Return (wards, sweeper_raw) from events within 5 min.
+    """Return (wards, sweeper_raw) from events across the full game.
 
     wards: [{t, tKilled, placer, type, x, z}]
     sweeper_raw: [{t, placer}] — positions assigned later from snapshots
@@ -456,7 +456,7 @@ def _compute_respawn_times(kills: List[dict], snapshots: Dict[str, Dict[str, lis
 
 
 def _load_kills(events_path: Optional[Path]) -> List[dict]:
-    """Return list of champion_kill events up to 5 min.
+    """Return list of champion_kill events across the full game.
 
     Each entry: {t, killer, victim, assists, x, z, respawnAt}
     killer/victim/assists are str participant IDs.

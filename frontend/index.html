@@ -495,7 +495,7 @@
 
     // ── Constants ────────────────────────────────────────────────────────────
     const MAP_MAX  = 14820;
-    const MAX_MS   = 600_000;
+    const MAX_MS   = 86_400_000;   // 24 h — effectively unlimited, full game
     const BADGE_PX = 60;
 
     // ── Coordinate helpers ───────────────────────────────────────────────────
@@ -548,7 +548,7 @@
     // ── Death helpers (respawnAt comes from server, detected from position data) ──
 
     // Returns {deathAt, respawnAt, remainingMs} if pid is dead at timeMs, else null.
-    // respawnAt is null when the champion didn't respawn within the 5-min window.
+    // respawnAt is null when the champion didn't respawn within the data window.
     function getDeathInfo(kills, pid, timeMs) {
       if (!kills) return null;
       for (let i = kills.length - 1; i >= 0; i--) {
@@ -971,7 +971,7 @@
 
             {/* Subtle series meta — center */}
             <span className="header-meta">
-              {seriesId ? `Series ${seriesId} · First 5 min` : ''}
+              {seriesId ? `Series ${seriesId} · Full game` : ''}
             </span>
 
             {/* Game tabs — right */}
