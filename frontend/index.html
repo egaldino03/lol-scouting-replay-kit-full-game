@@ -427,16 +427,17 @@
       font-size: 10px;
     }
 
-    /* ── Kill feed overlay ────────────────────── */
+    /* ── Kill feed (between map and sidebar) ──── */
     .kill-feed {
-      position: absolute;
-      top: 54px;
-      right: 10px;
       display: flex;
       flex-direction: column;
       gap: 3px;
-      pointer-events: none;
+      margin-left: 16px;
+      margin-top: 54px;
       max-width: 200px;
+      overflow-y: auto;
+      pointer-events: none;
+      flex-shrink: 0;
     }
 
     .kill-entry {
@@ -996,7 +997,6 @@
               <div className={`map-wrap ${loading ? 'fading' : ''}`}>
                 <MapCanvas gameData={gameData} mapSrc={mapSrc} timeMs={timeMs} wardIconImgs={wardIconImgs} sweeperUses={gameData?.sweeper_uses ?? []} />
                 <div className="map-timer">{timer}</div>
-                <KillFeed kills={gameData?.kills} participants={gameData?.participants} timeMs={timeMs} />
                 {loading && <div className="map-loading">Loading</div>}
               </div>
 
@@ -1036,6 +1036,9 @@
                 </div>
               </div>
             </section>
+
+            {/* Kill feed */}
+            <KillFeed kills={gameData?.kills} participants={gameData?.participants} timeMs={timeMs} />
 
             {/* Team panel */}
             <TeamPanel
